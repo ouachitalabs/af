@@ -468,35 +468,35 @@ Examples:
   export AIRFLOW_USER=admin AIRFLOW_PASSWORD=secret
 
   # List all DAGs
-  af.py list
+  afcli list
 
   # Get DAG status and recent runs
-  af.py status my_dag
+  afcli status my_dag
 
   # View tasks and their status in a DAG run
-  af.py tasks my_dag
+  afcli tasks my_dag
 
   # Trigger a DAG with configuration
-  af.py trigger my_dag --config '{"date": "2024-01-01", "env": "prod"}'
+  afcli trigger my_dag --config '{"date": "2024-01-01", "env": "prod"}'
 
   # View logs for a specific task
-  af.py logs my_dag task_name
+  afcli logs my_dag task_name
 
   # Pause/unpause DAGs
-  af.py pause my_dag
-  af.py unpause my_dag
+  afcli pause my_dag
+  afcli unpause my_dag
 
   # Clear failed tasks
-  af.py clear my_dag
+  afcli clear my_dag
 
   # Use with different Airflow instance
-  af.py --host airflow.company.com:8080 --user admin --password secret list
+  afcli --host airflow.company.com:8080 --user admin --password secret list
 
 Useful LLM Context Commands:
-  af.py list --limit 20                    # See available DAGs
-  af.py status <dag_id>                     # Get DAG details and recent runs
-  af.py tasks <dag_id>                      # See task execution status
-  af.py logs <dag_id> <task_id>            # Debug task failures
+  afcli list --limit 20                    # See available DAGs
+  afcli status <dag_id>                     # Get DAG details and recent runs
+  afcli tasks <dag_id>                      # See task execution status
+  afcli logs <dag_id> <task_id>            # Debug task failures
 """
 
     parser = argparse.ArgumentParser(
