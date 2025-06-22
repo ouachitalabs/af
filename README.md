@@ -1,5 +1,10 @@
 # Airflow CLI Wrapper
 
+[![Test](https://github.com/ouachitalabs/af/actions/workflows/test.yml/badge.svg)](https://github.com/ouachitalabs/af/actions/workflows/test.yml)
+[![PyPI version](https://badge.fury.io/py/afcli.svg)](https://badge.fury.io/py/afcli)
+[![Python versions](https://img.shields.io/pypi/pyversions/afcli.svg)](https://pypi.org/project/afcli/)
+[![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen)](https://github.com/ouachitalabs/af)
+
 A command-line utility for interacting with the Airflow REST API.
 
 ## Installation
@@ -137,6 +142,18 @@ The tool uses JWT (JSON Web Token) authentication. It automatically obtains a to
 # Install with test dependencies
 uv pip install -e ".[test]"
 ```
+
+### Releasing
+
+```bash
+# Create a new release (replace 0.2.0 with desired version)
+./scripts/release.sh 0.2.0
+```
+
+This will:
+1. Create and push a git tag
+2. Guide you to create a GitHub release
+3. Automatically trigger CI/CD to publish to PyPI
 
 ### Running Tests
 
