@@ -9,44 +9,57 @@ import os
 import sys
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
-import requests
-from requests.auth import HTTPBasicAuth
 from tabulate import tabulate
 from colorama import init, Fore, Style
+import airflow_client.client
+from airflow_client.client.api import dag_api, dag_run_api, task_instance_api
+from airflow_client.client.exceptions import OpenApiException
+import requests
 
 # Initialize colorama for cross-platform color support
 init(autoreset=True)
 
 
 class AirflowClient:
-    """Client for interacting with Airflow REST API"""
+    """Client for interacting with Airflow REST API using official apache-airflow-client"""
     
     def __init__(self, host: str = "localhost:8080", username: Optional[str] = None, password: Optional[str] = None):
         self.host = host
-        self.base_url = f"http://{host}/api/v2"
-        self.session = requests.Session()
-        self.token = None
+        self.base_url = f"http://{host}"  # Don't include /api/v2 here - the client adds it
+        self.auth_url = f"http://{host}/auth/token"
         
-        # Authenticate and get token if credentials provided
+        # Get JWT token if credentials provided
+        access_token = None
         if username and password:
-            self._authenticate(username, password)
+            access_token = self._get_jwt_token(username, password)
+        
+        # Configure the API client with JWT token
+        configuration = airflow_client.client.Configuration(
+            host=self.base_url,
+            access_token=access_token,
+        )
+        
+        # Create API client
+        self.api_client = airflow_client.client.ApiClient(configuration)
+        
+        # Initialize API instances
+        self.dag_api = dag_api.DAGApi(self.api_client)
+        self.dag_run_api = dag_run_api.DagRunApi(self.api_client)
+        self.task_instance_api = task_instance_api.TaskInstanceApi(self.api_client)
     
-    def _authenticate(self, username: str, password: str):
-        """Authenticate with Airflow and get a JWT token"""
-        auth_url = f"http://{self.host}/auth/token"
+    def _get_jwt_token(self, username: str, password: str) -> str:
+        """Get JWT token from Airflow auth endpoint"""
         try:
-            response = self.session.post(
-                auth_url,
+            response = requests.post(
+                self.auth_url,
                 json={"username": username, "password": password},
                 headers={"Content-Type": "application/json"}
             )
             response.raise_for_status()
             
-            # Extract token from response
             token_data = response.json()
             if 'access_token' in token_data:
-                self.token = token_data['access_token']
-                self.session.headers.update({"Authorization": f"Bearer {self.token}"})
+                return token_data['access_token']
             else:
                 print(f"{Fore.RED}No access token in response{Style.RESET_ALL}")
                 sys.exit(1)
@@ -60,98 +73,104 @@ class AirflowClient:
             print(f"{Fore.RED}Failed to authenticate: {e}{Style.RESET_ALL}")
             sys.exit(1)
     
-    def _request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
-        """Make a request to the Airflow API"""
-        url = f"{self.base_url}{endpoint}"
-        try:
-            response = self.session.request(method, url, **kwargs)
-            response.raise_for_status()
-            return response
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 401:
-                print(f"{Fore.RED}Authentication failed. Please check your credentials.{Style.RESET_ALL}")
-            elif e.response.status_code == 404:
-                print(f"{Fore.RED}Resource not found: {endpoint}{Style.RESET_ALL}")
-            else:
-                print(f"{Fore.RED}HTTP Error: {e}{Style.RESET_ALL}")
-            sys.exit(1)
-        except requests.exceptions.ConnectionError:
-            print(f"{Fore.RED}Failed to connect to Airflow at {self.base_url}{Style.RESET_ALL}")
-            sys.exit(1)
-        except requests.exceptions.RequestException as e:
-            print(f"{Fore.RED}Request failed: {e}{Style.RESET_ALL}")
-            sys.exit(1)
+    def _handle_api_error(self, e: OpenApiException, operation: str):
+        """Handle API errors with user-friendly messages"""
+        if e.status == 401:
+            print(f"{Fore.RED}Authentication failed. Please check your credentials.{Style.RESET_ALL}")
+        elif e.status == 404:
+            print(f"{Fore.RED}Resource not found for operation: {operation}{Style.RESET_ALL}")
+        elif e.status == 403:
+            print(f"{Fore.RED}Access forbidden for operation: {operation}{Style.RESET_ALL}")
+        else:
+            print(f"{Fore.RED}API Error ({e.status}): {e.reason}{Style.RESET_ALL}")
+        sys.exit(1)
     
     def list_dags(self, limit: int = 100, only_active: bool = True) -> List[Dict[str, Any]]:
         """List all DAGs"""
-        params = {"limit": limit, "only_active": only_active}
-        response = self._request("GET", "/dags", params=params)
-        return response.json().get("dags", [])
+        try:
+            # Convert only_active to paused parameter (inverted logic)
+            paused = None if not only_active else False
+            response = self.dag_api.get_dags(limit=limit, paused=paused)
+            return [dag.to_dict() for dag in response.dags] if response.dags else []
+        except OpenApiException as e:
+            self._handle_api_error(e, "list DAGs")
     
     def get_dag(self, dag_id: str) -> Dict[str, Any]:
         """Get DAG details"""
-        response = self._request("GET", f"/dags/{dag_id}")
-        return response.json()
+        try:
+            response = self.dag_api.get_dag(dag_id)
+            return response.to_dict()
+        except OpenApiException as e:
+            self._handle_api_error(e, f"get DAG {dag_id}")
     
     def get_dag_runs(self, dag_id: str, limit: int = 1) -> List[Dict[str, Any]]:
         """Get DAG runs"""
-        response = self._request("GET", f"/dags/{dag_id}/dagRuns", params={"limit": limit})
-        return response.json().get("dag_runs", [])
+        try:
+            response = self.dag_run_api.get_dag_runs(dag_id, limit=limit)
+            return [run.to_dict() for run in response.dag_runs] if response.dag_runs else []
+        except OpenApiException as e:
+            self._handle_api_error(e, f"get DAG runs for {dag_id}")
     
     def toggle_dag_pause(self, dag_id: str, is_paused: bool) -> Dict[str, Any]:
         """Toggle DAG pause state"""
-        response = self._request("PATCH", f"/dags/{dag_id}", json={"is_paused": is_paused})
-        return response.json()
+        try:
+            dag_update = airflow_client.client.DAGPatchBody(is_paused=is_paused)
+            response = self.dag_api.patch_dag(dag_id, dag_update)
+            return response.to_dict()
+        except OpenApiException as e:
+            self._handle_api_error(e, f"toggle pause for DAG {dag_id}")
     
     def trigger_dag(self, dag_id: str, config: Optional[Dict[str, Any]] = None, 
                     logical_date: Optional[str] = None, dag_run_id: Optional[str] = None) -> Dict[str, Any]:
         """Trigger a DAG run"""
-        # If no logical_date provided, use current time
-        if logical_date is None:
-            logical_date = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-        
-        data = {
-            "logical_date": logical_date,
-            "conf": config or {}
-        }
-        
-        # Add optional dag_run_id if provided
-        if dag_run_id:
-            data["dag_run_id"] = dag_run_id
+        try:
+            # If no logical_date provided, use current time
+            if logical_date is None:
+                logical_date = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
             
-        response = self._request("POST", f"/dags/{dag_id}/dagRuns", json=data)
-        return response.json()
+            dag_run = airflow_client.client.TriggerDAGRunPostBody(
+                logical_date=logical_date,
+                conf=config or {},
+                dag_run_id=dag_run_id
+            )
+            
+            response = self.dag_run_api.post_dag_run(dag_id, dag_run)
+            return response.to_dict()
+        except OpenApiException as e:
+            self._handle_api_error(e, f"trigger DAG {dag_id}")
     
     def get_task_instances(self, dag_id: str, dag_run_id: str) -> List[Dict[str, Any]]:
         """Get task instances for a DAG run"""
-        response = self._request("GET", f"/dags/{dag_id}/dagRuns/{dag_run_id}/taskInstances")
-        return response.json().get("task_instances", [])
+        try:
+            response = self.task_instance_api.get_task_instances(dag_id, dag_run_id)
+            return [task.to_dict() for task in response.task_instances] if response.task_instances else []
+        except OpenApiException as e:
+            self._handle_api_error(e, f"get task instances for {dag_id}/{dag_run_id}")
     
     def get_task_log(self, dag_id: str, dag_run_id: str, task_id: str, task_try_number: int = 1) -> str:
         """Get task log"""
-        response = self._request(
-            "GET", 
-            f"/dags/{dag_id}/dagRuns/{dag_run_id}/taskInstances/{task_id}/logs/{task_try_number}"
-        )
-        return response.text
+        try:
+            response = self.task_instance_api.get_log(dag_id, dag_run_id, task_id, task_try_number)
+            return response.content if hasattr(response, 'content') else str(response)
+        except OpenApiException as e:
+            self._handle_api_error(e, f"get logs for {dag_id}/{dag_run_id}/{task_id}")
     
     def clear_task_instance(self, dag_id: str, dag_run_id: str, task_id: str) -> Dict[str, Any]:
         """Clear a task instance"""
-        data = {
-            "dry_run": False,
-            "task_ids": [task_id],
-            "only_failed": True,
-            "only_running": False,
-            "include_subdags": True,
-            "include_parentdag": True,
-            "reset_dag_runs": False
-        }
-        response = self._request(
-            "POST",
-            f"/dags/{dag_id}/clearTaskInstances",
-            json=data
-        )
-        return response.json()
+        try:
+            clear_request = airflow_client.client.ClearTaskInstancesBody(
+                dry_run=False,
+                task_ids=[task_id],
+                only_failed=True,
+                only_running=False,
+                include_subdags=True,
+                include_parentdag=True,
+                reset_dag_runs=False
+            )
+            response = self.dag_api.post_clear_task_instances(dag_id, clear_request)
+            return response.to_dict() if hasattr(response, 'to_dict') else {}
+        except OpenApiException as e:
+            self._handle_api_error(e, f"clear task {task_id} for {dag_id}")
 
 
 def format_datetime(dt_str: Optional[str]) -> str:
