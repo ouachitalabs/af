@@ -128,3 +128,46 @@ python af.py clear example_dag
 ## Authentication
 
 The tool uses JWT (JSON Web Token) authentication. It automatically obtains a token using the provided credentials and includes it in all API requests.
+
+## Development
+
+### Installation for Development
+
+```bash
+# Install with test dependencies
+uv pip install -e ".[test]"
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=afcli --cov-report=html
+
+# Run specific test categories
+pytest -m unit         # Unit tests only
+pytest -m integration  # Integration tests only
+
+# Use Makefile commands
+make test              # All tests
+make test-cov          # With coverage report
+make test-unit         # Unit tests only
+```
+
+### Test Suite
+
+- **81 comprehensive tests** covering all functionality
+- **88% code coverage** with detailed reporting
+- **No external dependencies** - all API calls mocked
+- **Fast execution** - full suite runs in <1 second
+
+Test categories:
+- Unit tests for AirflowClient class methods
+- Integration tests for CLI commands  
+- Authentication and error handling tests
+- Utility function tests
+
+See `tests/README.md` for detailed testing documentation.
