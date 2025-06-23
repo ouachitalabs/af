@@ -388,3 +388,17 @@ class TestMainFunction:
         
         # Help should exit with code 0
         assert exc_info.value.code == 0
+    
+    @pytest.mark.integration
+    def test_afcli_module_import(self):
+        """Test that afcli module can be imported and executed"""
+        import subprocess
+        import sys
+        
+        # Test that the module can be imported and run
+        result = subprocess.run([
+            sys.executable, '-m', 'afcli', '--help'
+        ], capture_output=True, text=True)
+        
+        assert result.returncode == 0
+        assert 'usage:' in result.stdout.lower() or 'usage:' in result.stderr.lower()
