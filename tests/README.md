@@ -2,19 +2,6 @@
 
 This directory contains a comprehensive test suite for the AFCLI (Airflow CLI wrapper) tool.
 
-## Test Structure
-
-```
-tests/
-├── __init__.py                 # Test package initialization
-├── conftest.py                 # Pytest fixtures and configuration
-├── test_utils.py              # Tests for utility functions
-├── test_airflow_client.py     # Tests for AirflowClient class
-├── test_cli_commands.py       # Tests for CLI command functions
-├── test_auth_and_errors.py    # Tests for authentication and error handling
-└── README.md                  # This file
-```
-
 ## Test Categories
 
 ### Unit Tests (`@pytest.mark.unit`)
@@ -77,49 +64,15 @@ pytest tests/test_airflow_client.py::TestAirflowClientInit
 
 ## Test Coverage
 
-The test suite aims for >90% code coverage and includes:
+The test suite aims for >90% code coverage across all modules, including the AirflowClient class, CLI commands, utility functions, and authentication/error handling.
 
-### AirflowClient Class
-- ✅ Initialization with and without credentials
-- ✅ JWT token authentication
-- ✅ All API methods (list_dags, get_dag, etc.)
-- ✅ Error handling for API failures
-- ✅ Network error scenarios
+## Testing Approach
 
-### CLI Commands
-- ✅ All command functions (cmd_list, cmd_status, etc.)
-- ✅ Argument parsing and validation
-- ✅ Output formatting and display
-- ✅ Error scenarios and edge cases
-
-### Utility Functions
-- ✅ DateTime formatting
-- ✅ Status color mapping
-- ✅ Edge cases and error conditions
-
-### Authentication & Error Handling
-- ✅ JWT token retrieval
-- ✅ HTTP error responses
-- ✅ Network connectivity issues
-- ✅ API error propagation
-
-## Test Fixtures
-
-The test suite includes comprehensive fixtures in `conftest.py`:
-
-- `mock_airflow_client`: Mocked AirflowClient for unit tests
-- `mock_dag_data`: Sample DAG data
-- `mock_dag_run_data`: Sample DAG run data
-- `mock_task_instance_data`: Sample task instance data
-- `responses_mock`: HTTP request mocking
-- `mock_openapi_exception`: API exception creation
-
-## Mocking Strategy
-
-- **External APIs**: All Airflow API calls are mocked using `unittest.mock`
-- **HTTP Requests**: Authentication requests mocked with `responses`
-- **System Calls**: `sys.exit()` calls are caught with `pytest.raises(SystemExit)`
-- **Output**: `capsys` fixture captures stdout/stderr for verification
+The test suite uses comprehensive fixtures and mocking strategies to ensure:
+- All external API calls are properly mocked
+- Tests run without requiring a live Airflow instance
+- Output is captured and verified
+- Tests are deterministic and fast
 
 ## Continuous Integration
 

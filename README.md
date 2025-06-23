@@ -10,7 +10,12 @@ A command-line utility for interacting with the Airflow REST API.
 ## Installation
 
 ```bash
-pip install -r requirements.txt
+uv tool install afcli
+```
+
+Or with `pip`:
+```bash
+pip install afcli
 ```
 
 ## Configuration
@@ -143,18 +148,6 @@ The tool uses JWT (JSON Web Token) authentication. It automatically obtains a to
 uv pip install -e ".[test]"
 ```
 
-### Releasing
-
-```bash
-# Create a new release (replace 0.2.0 with desired version)
-./scripts/release.sh 0.2.0
-```
-
-This will:
-1. Create and push a git tag
-2. Guide you to create a GitHub release
-3. Automatically trigger CI/CD to publish to PyPI
-
 ### Running Tests
 
 ```bash
@@ -173,18 +166,3 @@ make test              # All tests
 make test-cov          # With coverage report
 make test-unit         # Unit tests only
 ```
-
-### Test Suite
-
-- **81 comprehensive tests** covering all functionality
-- **88% code coverage** with detailed reporting
-- **No external dependencies** - all API calls mocked
-- **Fast execution** - full suite runs in <1 second
-
-Test categories:
-- Unit tests for AirflowClient class methods
-- Integration tests for CLI commands
-- Authentication and error handling tests
-- Utility function tests
-
-See `tests/README.md` for detailed testing documentation.
