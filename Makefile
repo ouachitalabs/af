@@ -1,6 +1,6 @@
 # Makefile for AFCLI development and testing
 
-.PHONY: help install test test-unit test-integration test-cov lint clean check-all
+.PHONY: help install test test-unit test-integration test-cov lint clean build publish check-all
 
 # Default target
 help:
@@ -11,7 +11,9 @@ help:
 	@echo "  test-integration - Run integration tests only"
 	@echo "  test-cov      - Run tests with coverage report"
 	@echo "  lint          - Run code linting (if available)"
-	@echo "  clean         - Clean up generated files"
+	@echo "  clean         - Clean up generated files (including dist/)"
+	@echo "  build         - Build package distribution files"
+	@echo "  publish       - Build and publish package to PyPI"
 	@echo "  check-all     - Run all checks (tests, lint, coverage)"
 
 # Install package with test dependencies
@@ -40,6 +42,9 @@ lint:
 
 # Clean up generated files
 clean:
+	rm -rf dist/
+	rm -rf build/
+	rm -rf *.egg-info/
 	rm -rf htmlcov/
 	rm -rf .coverage
 	rm -rf .pytest_cache/
@@ -47,6 +52,14 @@ clean:
 	find . -name "*.pyc" -delete
 	find . -name "*.pyo" -delete
 	find . -name "__pycache__" -type d -exec rm -rf {} +
+
+# Build package distribution files
+build: clean
+	uv build
+
+# Build and publish package to PyPI
+publish: build
+	uv publish
 
 # Run all checks
 check-all: test-cov lint
