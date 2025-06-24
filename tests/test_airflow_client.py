@@ -212,7 +212,7 @@ class TestAirflowClientDagRunMethods:
         """Test successful DAG triggering"""
         mock_response = Mock()
         mock_response.to_dict.return_value = {"dag_run_id": "new_run", "state": "queued"}
-        mock_airflow_client.dag_run_api.post_dag_run.return_value = mock_response
+        mock_airflow_client.dag_run_api.trigger_dag_run.return_value = mock_response
         
         with patch('afcli.airflow_client.client.TriggerDAGRunPostBody') as mock_trigger_body:
             result = mock_airflow_client.trigger_dag("test_dag", {"key": "value"})
@@ -225,7 +225,7 @@ class TestAirflowClientDagRunMethods:
         """Test DAG triggering with custom logical date"""
         mock_response = Mock()
         mock_response.to_dict.return_value = {"dag_run_id": "new_run", "state": "queued"}
-        mock_airflow_client.dag_run_api.post_dag_run.return_value = mock_response
+        mock_airflow_client.dag_run_api.trigger_dag_run.return_value = mock_response
         
         with patch('afcli.airflow_client.client.TriggerDAGRunPostBody') as mock_trigger_body:
             custom_date = "2024-01-01T00:00:00Z"
@@ -278,6 +278,7 @@ class TestAirflowClientTaskMethods:
         """Test task log retrieval when response has no content attribute"""
         mock_response = Mock()
         del mock_response.content  # Remove content attribute
+        del mock_response.text  # Remove text attribute too
         mock_airflow_client.task_instance_api.get_log.return_value = mock_response
         
         result = mock_airflow_client.get_task_log("test_dag", "test_run_1", "test_task", 1)
@@ -289,7 +290,7 @@ class TestAirflowClientTaskMethods:
         """Test successful task instance clearing"""
         mock_response = Mock()
         mock_response.to_dict.return_value = {"task_instances_cleared": ["test_task"]}
-        mock_airflow_client.dag_api.post_clear_task_instances.return_value = mock_response
+        mock_airflow_client.task_instance_api.post_clear_task_instances.return_value = mock_response
         
         with patch('afcli.airflow_client.client.ClearTaskInstancesBody') as mock_clear_body:
             result = mock_airflow_client.clear_task_instance("test_dag", "test_run_1", "test_task")

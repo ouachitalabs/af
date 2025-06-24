@@ -8,7 +8,7 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 from rich.table import Table
 from rich.console import Console
 from rich.text import Text
@@ -173,7 +173,7 @@ class AirflowClient:
                 dag_run_id=dag_run_id
             )
             
-            response = self.dag_run_api.post_dag_run(dag_id, dag_run)
+            response = self.dag_run_api.trigger_dag_run(dag_id, dag_run)
             return response.to_dict()
         except OpenApiException as e:
             self._handle_api_error(e, f"trigger DAG {dag_id}")
@@ -190,7 +190,18 @@ class AirflowClient:
         """Get task log"""
         try:
             response = self.task_instance_api.get_log(dag_id, dag_run_id, task_id, task_try_number)
-            return response.content if hasattr(response, 'content') else str(response)
+            
+            # Handle different response types
+            if hasattr(response, 'content'):
+                # Content object - extract the actual content
+                content = response.content
+                if hasattr(content, 'decode'):
+                    return content.decode('utf-8')
+                return str(content)
+            elif hasattr(response, 'text'):
+                return response.text
+            else:
+                return str(response)
         except OpenApiException as e:
             self._handle_api_error(e, f"get logs for {dag_id}/{dag_run_id}/{task_id}")
     
@@ -206,21 +217,27 @@ class AirflowClient:
                 include_parentdag=True,
                 reset_dag_runs=False
             )
-            response = self.dag_api.post_clear_task_instances(dag_id, clear_request)
+            response = self.task_instance_api.post_clear_task_instances(dag_id, clear_request)
             return response.to_dict() if hasattr(response, 'to_dict') else {}
         except OpenApiException as e:
             self._handle_api_error(e, f"clear task {task_id} for {dag_id}")
 
 
-def format_datetime(dt_str: Optional[str]) -> str:
-    """Format datetime string for display"""
-    if not dt_str:
+def format_datetime(dt_input: Optional[Union[str, datetime]]) -> str:
+    """Format datetime string or object for display"""
+    if not dt_input:
         return "N/A"
+    
+    # Handle datetime objects directly
+    if hasattr(dt_input, 'strftime'):
+        return dt_input.strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Handle string inputs
     try:
-        dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+        dt = datetime.fromisoformat(dt_input.replace('Z', '+00:00'))
         return dt.strftime("%Y-%m-%d %H:%M:%S")
     except:
-        return dt_str
+        return str(dt_input)
 
 
 def get_status_color(state: str) -> str:
@@ -459,10 +476,25 @@ def cmd_tasks(client: AirflowClient, args):
         
         # Calculate duration
         duration = "N/A"
-        if task.get('start_date') and task.get('end_date'):
+        start_date = task.get('start_date')
+        end_date = task.get('end_date')
+        if start_date and end_date:
             try:
-                start = datetime.fromisoformat(task['start_date'].replace('Z', '+00:00'))
-                end = datetime.fromisoformat(task['end_date'].replace('Z', '+00:00'))
+                # Handle both datetime objects and strings
+                if hasattr(start_date, 'replace') and not hasattr(start_date, 'strftime'):
+                    # It's a string
+                    start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+                else:
+                    # It's a datetime object
+                    start = start_date
+                
+                if hasattr(end_date, 'replace') and not hasattr(end_date, 'strftime'):
+                    # It's a string
+                    end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+                else:
+                    # It's a datetime object
+                    end = end_date
+                
                 duration = str(end - start).split('.')[0]  # Remove microseconds
             except:
                 pass
@@ -516,37 +548,70 @@ def cmd_logs(client: AirflowClient, args):
         print(f"\n{Fore.CYAN}Logs for task '{args.task_id}' (Try: {args.try_number}):{Style.RESET_ALL}")
         print("-" * 80)
         
-        # Try to parse as JSON and format nicely
-        try:
-            log_data = json.loads(logs)
-            if isinstance(log_data, dict) and 'content' in log_data:
-                for entry in log_data['content']:
-                    if 'timestamp' in entry and 'event' in entry:
-                        timestamp = entry['timestamp'][:19].replace('T', ' ')
-                        level = entry.get('level', 'info').upper()
-                        logger = entry.get('logger', '')
-                        event = entry['event']
-                        
-                        # Color code by level
-                        if level == 'ERROR':
-                            level_color = Fore.RED
-                        elif level == 'WARNING':
-                            level_color = Fore.YELLOW
-                        elif level == 'INFO':
-                            level_color = Fore.CYAN
+        # Handle different log formats
+        if 'StructuredLogMessage' in logs:
+            # Airflow 3.0.x structured logs
+            # Extract log messages from the raw response
+            import re
+            
+            # Parse StructuredLogMessage entries
+            pattern = r"StructuredLogMessage\(event='([^']*)'(?:, timestamp=([^)]*))?\)"
+            matches = re.findall(pattern, logs)
+            
+            for event, timestamp in matches:
+                if timestamp and timestamp != 'None':
+                    # Format timestamp
+                    try:
+                        if 'datetime.datetime' in timestamp:
+                            # Extract just the readable part
+                            time_match = re.search(r'(\d{4}, \d+, \d+, \d+, \d+, \d+)', timestamp)
+                            if time_match:
+                                parts = time_match.group(1).split(', ')
+                                if len(parts) >= 6:
+                                    formatted_time = f"{parts[0]}-{parts[1]:0>2}-{parts[2]:0>2} {parts[3]:0>2}:{parts[4]:0>2}:{parts[5]:0>2}"
+                                    print(f"{formatted_time} {event}")
+                                else:
+                                    print(f"{event}")
+                            else:
+                                print(f"{event}")
                         else:
-                            level_color = Fore.WHITE
-                        
-                        print(f"{timestamp} {level_color}[{level}]{Style.RESET_ALL} {logger}: {event}")
-                    elif 'event' in entry:
-                        # Simple event without timestamp
-                        print(entry['event'])
-            else:
-                # Not the expected format, print as is
+                            print(f"{timestamp} {event}")
+                    except:
+                        print(f"{event}")
+                else:
+                    print(f"{event}")
+        else:
+            # Try to parse as JSON and format nicely
+            try:
+                log_data = json.loads(logs)
+                if isinstance(log_data, dict) and 'content' in log_data:
+                    for entry in log_data['content']:
+                        if 'timestamp' in entry and 'event' in entry:
+                            timestamp = entry['timestamp'][:19].replace('T', ' ')
+                            level = entry.get('level', 'info').upper()
+                            logger = entry.get('logger', '')
+                            event = entry['event']
+                            
+                            # Color code by level
+                            if level == 'ERROR':
+                                level_color = Fore.RED
+                            elif level == 'WARNING':
+                                level_color = Fore.YELLOW
+                            elif level == 'INFO':
+                                level_color = Fore.CYAN
+                            else:
+                                level_color = Fore.WHITE
+                            
+                            print(f"{timestamp} {level_color}[{level}]{Style.RESET_ALL} {logger}: {event}")
+                        elif 'event' in entry:
+                            # Simple event without timestamp
+                            print(entry['event'])
+                else:
+                    # Not the expected format, print as is
+                    print(logs)
+            except json.JSONDecodeError:
+                # Not JSON, print as plain text
                 print(logs)
-        except json.JSONDecodeError:
-            # Not JSON, print as plain text
-            print(logs)
             
         print("-" * 80)
     except Exception as e:

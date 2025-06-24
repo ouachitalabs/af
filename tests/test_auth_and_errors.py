@@ -320,7 +320,7 @@ class TestClientMethodErrorHandling:
     def test_trigger_dag_api_error(self, mock_airflow_client, mock_openapi_exception):
         """Test trigger_dag method with API error"""
         with patch('afcli.airflow_client.client.TriggerDAGRunPostBody'), \
-             patch.object(mock_airflow_client.dag_run_api, 'post_dag_run', 
+             patch.object(mock_airflow_client.dag_run_api, 'trigger_dag_run', 
                          side_effect=mock_openapi_exception(400)):
             
             with pytest.raises(SystemExit):
@@ -346,7 +346,7 @@ class TestClientMethodErrorHandling:
     def test_clear_task_instance_api_error(self, mock_airflow_client, mock_openapi_exception):
         """Test clear_task_instance method with API error"""
         with patch('afcli.airflow_client.client.ClearTaskInstancesBody'), \
-             patch.object(mock_airflow_client.dag_api, 'post_clear_task_instances', 
+             patch.object(mock_airflow_client.task_instance_api, 'post_clear_task_instances', 
                          side_effect=mock_openapi_exception(403)):
             
             with pytest.raises(SystemExit):
