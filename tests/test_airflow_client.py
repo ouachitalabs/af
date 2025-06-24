@@ -27,10 +27,9 @@ class TestAirflowClientInit:
         assert client.base_url == "http://localhost:8080"
         assert client.auth_url == "http://localhost:8080/auth/token"
         
-        # Configuration should be called with no access token
+        # Configuration should be called with host only
         mock_config.assert_called_once_with(
-            host="http://localhost:8080",
-            access_token=None
+            host="http://localhost:8080"
         )
     
     @pytest.mark.unit
@@ -39,19 +38,21 @@ class TestAirflowClientInit:
     @patch('afcli.dag_api.DAGApi')
     @patch('afcli.dag_run_api.DagRunApi')
     @patch('afcli.task_instance_api.TaskInstanceApi')
-    @patch.object(AirflowClient, '_get_jwt_token')
+    @patch.object(AirflowClient, '_try_get_jwt_token')
     def test_init_with_credentials(self, mock_get_token, mock_task_api, mock_dag_run_api, 
                                  mock_dag_api, mock_api_client, mock_config):
         """Test initialization with credentials"""
-        mock_get_token.return_value = "test_token"
+        mock_get_token.return_value = {"success": True, "token": "test_token"}
         
         client = AirflowClient("localhost:8080", "admin", "password")
         
         mock_get_token.assert_called_once_with("admin", "password")
         mock_config.assert_called_once_with(
-            host="http://localhost:8080",
-            access_token="test_token"
+            host="http://localhost:8080"
         )
+        # Verify access_token was set on the configuration instance
+        config_instance = mock_config.return_value
+        assert config_instance.access_token == "test_token"
 
 
 class TestAirflowClientAuth:
@@ -74,8 +75,10 @@ class TestAirflowClientAuth:
              patch('afcli.task_instance_api.TaskInstanceApi'):
             
             client = AirflowClient("localhost:8080")
-            token = client._get_jwt_token("admin", "password")
+            result = client._try_get_jwt_token("admin", "password")
+            token = result["token"]
             
+            assert result["success"] is True
             assert token == sample_jwt_response["access_token"]
     
     @pytest.mark.unit
@@ -97,7 +100,7 @@ class TestAirflowClientAuth:
             client = AirflowClient("localhost:8080")
             
             with pytest.raises(SystemExit):
-                client._get_jwt_token("admin", "wrong_password")
+                client._try_get_jwt_token("admin", "wrong_password")
     
     @pytest.mark.unit
     def test_get_jwt_token_no_access_token(self, responses_mock):
@@ -117,8 +120,9 @@ class TestAirflowClientAuth:
             
             client = AirflowClient("localhost:8080")
             
-            with pytest.raises(SystemExit):
-                client._get_jwt_token("admin", "password")
+            result = client._try_get_jwt_token("admin", "password")
+            assert result["success"] is False
+            assert result["token"] is None
 
 
 class TestAirflowClientDagMethods:

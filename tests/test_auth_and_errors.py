@@ -108,7 +108,7 @@ class TestAuthentication:
                 client._try_get_jwt_token("admin", "password")
             
             captured = capsys.readouterr()
-            assert "Failed to authenticate" in captured.out
+            assert "Failed to connect to Airflow" in captured.out
     
     @pytest.mark.unit
     def test_try_get_jwt_token_missing_access_token(self, responses_mock, capsys):
@@ -359,22 +359,13 @@ class TestNetworkErrorHandling:
     @pytest.mark.unit
     def test_authentication_network_timeout(self, responses_mock, capsys):
         """Test authentication with network timeout"""
-        import socket
-        
-        def request_callback(request):
-            raise socket.timeout("Request timed out")
-        
-        responses_mock.add_callback(
-            responses.POST,
-            "http://localhost:8080/auth/token",
-            callback=request_callback
-        )
         
         with patch('afcli.airflow_client.client.Configuration'), \
              patch('afcli.airflow_client.client.ApiClient'), \
              patch('afcli.dag_api.DAGApi'), \
              patch('afcli.dag_run_api.DagRunApi'), \
-             patch('afcli.task_instance_api.TaskInstanceApi'):
+             patch('afcli.task_instance_api.TaskInstanceApi'), \
+             patch('requests.post', side_effect=requests.exceptions.Timeout("Request timed out")):
             
             client = AirflowClient("localhost:8080")
             
@@ -382,7 +373,7 @@ class TestNetworkErrorHandling:
                 client._try_get_jwt_token("admin", "password")
             
             captured = capsys.readouterr()
-            assert "Failed to authenticate" in captured.out
+            assert "Connection timeout to Airflow" in captured.out
     
     @pytest.mark.unit
     def test_authentication_dns_error(self, capsys):
@@ -400,4 +391,4 @@ class TestNetworkErrorHandling:
                 client._try_get_jwt_token("admin", "password")
             
             captured = capsys.readouterr()
-            assert "Failed to authenticate" in captured.out
+            assert "Failed to connect to Airflow" in captured.out

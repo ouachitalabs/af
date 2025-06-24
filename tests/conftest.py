@@ -69,7 +69,7 @@ def mock_airflow_client():
     from unittest.mock import patch, Mock
     
     # Mock the initialization to avoid actual API calls
-    with patch.object(AirflowClient, '_get_jwt_token', return_value="mock_token"):
+    with patch.object(AirflowClient, '_try_get_jwt_token', return_value={"success": True, "token": "mock_token"}):
         with patch('airflow_client.client.Configuration'):
             with patch('airflow_client.client.ApiClient'):
                 with patch('airflow_client.client.api.dag_api.DAGApi'):
