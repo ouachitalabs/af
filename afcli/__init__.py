@@ -27,17 +27,34 @@ class AirflowClient:
         self.host = host
         self.base_url = f"http://{host}"  # Don't include /api/v2 here - the client adds it
         self.auth_url = f"http://{host}/auth/token"
+        self.username = username
+        self.password = password
         
-        # Get JWT token if credentials provided
+        # Try JWT token first (Airflow 3.x), fall back to basic auth (Airflow 2.9.x)
         access_token = None
-        if username and password:
-            access_token = self._get_jwt_token(username, password)
+        use_basic_auth = False
         
-        # Configure the API client with JWT token
+        if username and password:
+            jwt_result = self._try_get_jwt_token(username, password)
+            if jwt_result['success']:
+                access_token = jwt_result['token']
+            else:
+                # JWT failed, will use basic auth
+                use_basic_auth = True
+                print(f"{Fore.YELLOW}JWT authentication not available, using basic auth{Style.RESET_ALL}")
+        
+        # Configure the API client
         configuration = airflow_client.client.Configuration(
-            host=self.base_url,
-            access_token=access_token,
+            host=self.base_url
         )
+        
+        if access_token:
+            # Use JWT token for Airflow 3.x
+            configuration.access_token = access_token
+        elif use_basic_auth and username and password:
+            # Use basic auth for Airflow 2.9.x
+            configuration.username = username
+            configuration.password = password
         
         # Create API client
         self.api_client = airflow_client.client.ApiClient(configuration)
@@ -47,27 +64,47 @@ class AirflowClient:
         self.dag_run_api = dag_run_api.DagRunApi(self.api_client)
         self.task_instance_api = task_instance_api.TaskInstanceApi(self.api_client)
     
-    def _get_jwt_token(self, username: str, password: str) -> str:
-        """Get JWT token from Airflow auth endpoint"""
+    def _try_get_jwt_token(self, username: str, password: str) -> Dict[str, Any]:
+        """Try to get JWT token from Airflow auth endpoint (Airflow 3.x)
+        
+        Returns:
+            dict: {'success': bool, 'token': str or None}
+        """
         try:
             response = requests.post(
                 self.auth_url,
                 json={"username": username, "password": password},
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                timeout=5
             )
+            
+            if response.status_code == 404:
+                # /auth/token endpoint doesn't exist - likely Airflow 2.9.x
+                return {'success': False, 'token': None}
+            
             response.raise_for_status()
             
             token_data = response.json()
             if 'access_token' in token_data:
-                return token_data['access_token']
+                return {'success': True, 'token': token_data['access_token']}
             else:
-                print(f"{Fore.RED}No access token in response{Style.RESET_ALL}")
-                sys.exit(1)
+                return {'success': False, 'token': None}
                 
         except requests.exceptions.HTTPError as e:
-            print(f"{Fore.RED}Authentication failed: {e}{Style.RESET_ALL}")
-            if e.response:
-                print(f"{Fore.RED}Response: {e.response.text}{Style.RESET_ALL}")
+            if e.response and e.response.status_code == 404:
+                # /auth/token endpoint doesn't exist - likely Airflow 2.9.x
+                return {'success': False, 'token': None}
+            else:
+                # Real authentication error - still exit
+                print(f"{Fore.RED}Authentication failed: {e}{Style.RESET_ALL}")
+                if e.response:
+                    print(f"{Fore.RED}Response: {e.response.text}{Style.RESET_ALL}")
+                sys.exit(1)
+        except requests.exceptions.ConnectionError:
+            print(f"{Fore.RED}Failed to connect to Airflow at {self.host}{Style.RESET_ALL}")
+            sys.exit(1)
+        except requests.exceptions.Timeout:
+            print(f"{Fore.RED}Connection timeout to Airflow at {self.host}{Style.RESET_ALL}")
             sys.exit(1)
         except Exception as e:
             print(f"{Fore.RED}Failed to authenticate: {e}{Style.RESET_ALL}")

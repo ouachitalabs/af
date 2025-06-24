@@ -13,7 +13,7 @@ class TestAuthentication:
     """Test authentication mechanisms"""
     
     @pytest.mark.unit
-    def test_get_jwt_token_success(self, responses_mock, sample_jwt_response):
+    def test_try_get_jwt_token_success(self, responses_mock, sample_jwt_response):
         """Test successful JWT token retrieval"""
         responses_mock.add(
             responses.POST,
@@ -29,9 +29,10 @@ class TestAuthentication:
              patch('afcli.task_instance_api.TaskInstanceApi'):
             
             client = AirflowClient("localhost:8080")
-            token = client._get_jwt_token("admin", "password")
+            result = client._try_get_jwt_token("admin", "password")
             
-            assert token == "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.token"
+            assert result['success'] is True
+            assert result['token'] == "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.token"
             
             # Verify the request was made correctly
             assert len(responses_mock.calls) == 1
@@ -42,7 +43,7 @@ class TestAuthentication:
             assert '"password": "password"' in request_body
     
     @pytest.mark.unit
-    def test_get_jwt_token_http_401_error(self, responses_mock, capsys):
+    def test_try_get_jwt_token_http_401_error(self, responses_mock, capsys):
         """Test JWT token retrieval with 401 error"""
         responses_mock.add(
             responses.POST,
@@ -60,13 +61,13 @@ class TestAuthentication:
             client = AirflowClient("localhost:8080")
             
             with pytest.raises(SystemExit):
-                client._get_jwt_token("admin", "wrong_password")
+                client._try_get_jwt_token("admin", "wrong_password")
             
             captured = capsys.readouterr()
             assert "Authentication failed" in captured.out
     
     @pytest.mark.unit
-    def test_get_jwt_token_http_500_error(self, responses_mock, capsys):
+    def test_try_get_jwt_token_http_500_error(self, responses_mock, capsys):
         """Test JWT token retrieval with 500 server error"""
         responses_mock.add(
             responses.POST,
@@ -84,13 +85,13 @@ class TestAuthentication:
             client = AirflowClient("localhost:8080")
             
             with pytest.raises(SystemExit):
-                client._get_jwt_token("admin", "password")
+                client._try_get_jwt_token("admin", "password")
             
             captured = capsys.readouterr()
             assert "Authentication failed" in captured.out
     
     @pytest.mark.unit
-    def test_get_jwt_token_connection_error(self, responses_mock, capsys):
+    def test_try_get_jwt_token_connection_error(self, responses_mock, capsys):
         """Test JWT token retrieval with connection error"""
         # Don't add any response to simulate connection error
         
@@ -104,13 +105,13 @@ class TestAuthentication:
             client = AirflowClient("localhost:8080")
             
             with pytest.raises(SystemExit):
-                client._get_jwt_token("admin", "password")
+                client._try_get_jwt_token("admin", "password")
             
             captured = capsys.readouterr()
             assert "Failed to authenticate" in captured.out
     
     @pytest.mark.unit
-    def test_get_jwt_token_missing_access_token(self, responses_mock, capsys):
+    def test_try_get_jwt_token_missing_access_token(self, responses_mock, capsys):
         """Test JWT token retrieval when response doesn't contain access_token"""
         responses_mock.add(
             responses.POST,
@@ -126,15 +127,13 @@ class TestAuthentication:
              patch('afcli.task_instance_api.TaskInstanceApi'):
             
             client = AirflowClient("localhost:8080")
+            result = client._try_get_jwt_token("admin", "password")
             
-            with pytest.raises(SystemExit):
-                client._get_jwt_token("admin", "password")
-            
-            captured = capsys.readouterr()
-            assert "No access token in response" in captured.out
+            assert result['success'] is False
+            assert result['token'] is None
     
     @pytest.mark.unit
-    def test_get_jwt_token_invalid_json(self, responses_mock, capsys):
+    def test_try_get_jwt_token_invalid_json(self, responses_mock, capsys):
         """Test JWT token retrieval with invalid JSON response"""
         responses_mock.add(
             responses.POST,
@@ -153,10 +152,62 @@ class TestAuthentication:
             client = AirflowClient("localhost:8080")
             
             with pytest.raises(SystemExit):
-                client._get_jwt_token("admin", "password")
+                client._try_get_jwt_token("admin", "password")
             
             captured = capsys.readouterr()
             assert "Failed to authenticate" in captured.out
+    
+    @pytest.mark.unit
+    def test_jwt_endpoint_not_found_fallback(self, responses_mock, capsys):
+        """Test fallback to basic auth when JWT endpoint returns 404 (Airflow 2.9.x)"""
+        responses_mock.add(
+            responses.POST,
+            "http://localhost:8080/auth/token",
+            status=404
+        )
+        
+        config_instance = MagicMock()
+        
+        with patch('afcli.airflow_client.client.Configuration', return_value=config_instance) as mock_config, \
+             patch('afcli.airflow_client.client.ApiClient'), \
+             patch('afcli.dag_api.DAGApi'), \
+             patch('afcli.dag_run_api.DagRunApi'), \
+             patch('afcli.task_instance_api.TaskInstanceApi'):
+            
+            # Create client with credentials
+            client = AirflowClient("localhost:8080", "admin", "password")
+            
+            # Verify basic auth was configured instead of JWT
+            assert config_instance.username == "admin"
+            assert config_instance.password == "password"
+            
+            # Check warning message was printed
+            captured = capsys.readouterr()
+            assert "JWT authentication not available, using basic auth" in captured.out
+    
+    @pytest.mark.unit
+    def test_jwt_success_uses_token_auth(self, responses_mock, sample_jwt_response):
+        """Test that successful JWT auth results in token-based configuration"""
+        responses_mock.add(
+            responses.POST,
+            "http://localhost:8080/auth/token",
+            json=sample_jwt_response,
+            status=200
+        )
+        
+        config_instance = MagicMock()
+        
+        with patch('afcli.airflow_client.client.Configuration', return_value=config_instance) as mock_config, \
+             patch('afcli.airflow_client.client.ApiClient'), \
+             patch('afcli.dag_api.DAGApi'), \
+             patch('afcli.dag_run_api.DagRunApi'), \
+             patch('afcli.task_instance_api.TaskInstanceApi'):
+            
+            # Create client with credentials
+            client = AirflowClient("localhost:8080", "admin", "password")
+            
+            # Verify JWT was configured
+            assert config_instance.access_token == "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test.token"
 
 
 class TestErrorHandling:
@@ -328,7 +379,7 @@ class TestNetworkErrorHandling:
             client = AirflowClient("localhost:8080")
             
             with pytest.raises(SystemExit):
-                client._get_jwt_token("admin", "password")
+                client._try_get_jwt_token("admin", "password")
             
             captured = capsys.readouterr()
             assert "Failed to authenticate" in captured.out
@@ -346,7 +397,7 @@ class TestNetworkErrorHandling:
             client = AirflowClient("invalid-host:8080")
             
             with pytest.raises(SystemExit):
-                client._get_jwt_token("admin", "password")
+                client._try_get_jwt_token("admin", "password")
             
             captured = capsys.readouterr()
             assert "Failed to authenticate" in captured.out

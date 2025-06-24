@@ -5,7 +5,7 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/afcli.svg)](https://pypi.org/project/afcli/)
 [![Coverage](https://img.shields.io/badge/coverage-88%25-brightgreen)](https://github.com/ouachitalabs/af)
 
-A command-line utility for interacting with the Airflow REST API.
+A command-line utility for interacting with the Airflow REST API. Compatible with both Airflow 2.9.x (basic auth) and 3.x (JWT auth).
 
 ## Installation
 
@@ -137,7 +137,12 @@ afcli clear example_dag
 
 ## Authentication
 
-The tool uses JWT (JSON Web Token) authentication. It automatically obtains a token using the provided credentials and includes it in all API requests.
+The tool automatically detects and uses the appropriate authentication method:
+
+- **Airflow 3.x**: Uses JWT (JSON Web Token) authentication. The tool obtains a token from `/auth/token` and includes it in API requests.
+- **Airflow 2.9.x**: Falls back to basic authentication when JWT endpoint is not available.
+
+Authentication happens transparently - simply provide your credentials and the tool will use the appropriate method.
 
 ## Development
 
