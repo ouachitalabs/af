@@ -292,12 +292,29 @@ def cmd_list(client: AirflowClient, args):
         paused_text = Text('Paused' if is_paused else 'Active', style="red" if is_paused else "green")
         import_errors_text = Text('Yes', style="red") if dag.get('has_import_errors', False) else Text('No')
         
+        # Handle next run date - try multiple possible field names and formats
+        next_run = None
+        for field_name in ['next_dagrun_run_after', 'next_dagrun_logical_date', 'next_dagrun']:
+            next_run_value = dag.get(field_name)
+            if next_run_value:
+                # Handle both string and datetime objects
+                if hasattr(next_run_value, 'isoformat'):
+                    # It's a datetime object
+                    next_run = next_run_value.strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    # It's a string
+                    next_run = format_datetime(next_run_value)
+                break
+        
+        if not next_run:
+            next_run = "N/A"
+        
         rows.append([
             dag_id_display,
             paused_text,
             schedule,
             ', '.join(tag_names) or 'None',
-            format_datetime(dag.get('next_dagrun_run_after')),
+            next_run,
             import_errors_text
         ])
     
@@ -343,7 +360,20 @@ def cmd_status(client: AirflowClient, args):
     print(f"Max Active Runs: {dag.get('max_active_runs', 'N/A')}")
     if dag.get('has_import_errors', False):
         print(f"{Fore.RED}Import Errors: Yes{Style.RESET_ALL}")
-    print(f"Next Run: {format_datetime(dag.get('next_dagrun_run_after'))}")
+    # Handle next run date with multiple possible field names and formats
+    next_run_display = None
+    for field_name in ['next_dagrun_run_after', 'next_dagrun_logical_date', 'next_dagrun']:
+        next_run_value = dag.get(field_name)
+        if next_run_value:
+            if hasattr(next_run_value, 'isoformat'):
+                # It's a datetime object
+                next_run_display = next_run_value.strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                # It's a string
+                next_run_display = format_datetime(next_run_value)
+            break
+    
+    print(f"Next Run: {next_run_display or 'N/A'}")
     
     if dag_runs:
         print(f"\n{Fore.CYAN}Recent DAG Runs:{Style.RESET_ALL}")
