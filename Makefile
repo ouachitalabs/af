@@ -59,7 +59,7 @@ build: clean
 
 # Build and publish package to PyPI
 publish: build
-	uv publish
+	./publish.sh
 
 # Run all checks
 check-all: test-cov lint
