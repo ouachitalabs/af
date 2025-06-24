@@ -9,7 +9,9 @@ import os
 import sys
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
-from tabulate import tabulate
+from rich.table import Table
+from rich.console import Console
+from rich.text import Text
 from colorama import init, Fore, Style
 import airflow_client.client
 from airflow_client.client.api import dag_api, dag_run_api, task_instance_api
@@ -239,6 +241,24 @@ def get_status_color(state: str) -> str:
     return state_colors.get(state.lower(), Fore.WHITE)
 
 
+def get_rich_style(state: str) -> str:
+    """Get Rich style for task/dag state"""
+    state_styles = {
+        "success": "green",
+        "failed": "red",
+        "running": "yellow",
+        "queued": "cyan",
+        "scheduled": "blue",
+        "skipped": "magenta",
+        "up_for_retry": "yellow",
+        "up_for_reschedule": "yellow",
+        "deferred": "cyan",
+        "removed": "dim",
+        "restarting": "yellow"
+    }
+    return state_styles.get(state.lower(), "white")
+
+
 def cmd_list(client: AirflowClient, args):
     """List all DAGs"""
     dags = client.list_dags(limit=args.limit, only_active=not args.all)
@@ -255,11 +275,11 @@ def cmd_list(client: AirflowClient, args):
     for dag in sorted(dags, key=lambda x: x['dag_id']):
         # Color code based on status
         if dag.get('has_import_errors', False):
-            dag_id_display = f"{Fore.RED}{dag['dag_id']}{Style.RESET_ALL}"
+            dag_id_display = Text(dag['dag_id'], style="red")
         elif dag.get('is_paused', True):
-            dag_id_display = f"{Fore.YELLOW}{dag['dag_id']}{Style.RESET_ALL}"
+            dag_id_display = Text(dag['dag_id'], style="yellow")
         else:
-            dag_id_display = f"{Fore.GREEN}{dag['dag_id']}{Style.RESET_ALL}"
+            dag_id_display = Text(dag['dag_id'], style="green")
         
         # Get schedule info
         schedule = dag.get('timetable_summary') or dag.get('timetable_description', 'None')
@@ -268,16 +288,27 @@ def cmd_list(client: AirflowClient, args):
         tags = dag.get('tags', [])
         tag_names = [tag['name'] if isinstance(tag, dict) else str(tag) for tag in tags]
         
+        is_paused = dag.get('is_paused', True)
+        paused_text = Text('Paused' if is_paused else 'Active', style="red" if is_paused else "green")
+        import_errors_text = Text('Yes', style="red") if dag.get('has_import_errors', False) else Text('No')
+        
         rows.append([
             dag_id_display,
-            f"{Fore.RED if dag.get('is_paused', True) else Fore.GREEN}{'Paused' if dag.get('is_paused', True) else 'Active'}{Style.RESET_ALL}",
+            paused_text,
             schedule,
             ', '.join(tag_names) or 'None',
             format_datetime(dag.get('next_dagrun_run_after')),
-            f"{Fore.RED}Yes{Style.RESET_ALL}" if dag.get('has_import_errors', False) else "No"
+            import_errors_text
         ])
     
-    print(tabulate(rows, headers=headers, tablefmt="grid"))
+    table = Table(show_header=True, header_style="bold cyan")
+    for header in headers:
+        table.add_column(header)
+    for row in rows:
+        table.add_row(*row)
+    
+    console = Console()
+    console.print(table)
     
     # Summary
     total_count = len(dags)
@@ -321,13 +352,21 @@ def cmd_status(client: AirflowClient, args):
         for run in dag_runs:
             state = run.get('state', 'unknown')
             color = get_status_color(state)
+            state_text = Text(state, style=get_rich_style(state))
             rows.append([
                 run['dag_run_id'],
-                f"{color}{state}{Style.RESET_ALL}",
+                state_text,
                 format_datetime(run.get('start_date')),
                 format_datetime(run.get('end_date'))
             ])
-        print(tabulate(rows, headers=headers, tablefmt="grid"))
+        table = Table(show_header=True, header_style="bold cyan")
+        for header in headers:
+            table.add_column(header)
+        for row in rows:
+            table.add_row(*row)
+        
+        console = Console()
+        console.print(table)
     else:
         print(f"\n{Fore.YELLOW}No recent runs found{Style.RESET_ALL}")
 
@@ -398,16 +437,24 @@ def cmd_tasks(client: AirflowClient, args):
             except:
                 pass
         
+        state_text = Text(state, style=get_rich_style(state))
         rows.append([
             task['task_id'],
-            f"{color}{state}{Style.RESET_ALL}",
+            state_text,
             format_datetime(task.get('start_date')),
             format_datetime(task.get('end_date')),
             duration,
-            task.get('try_number', 1)
+            str(task.get('try_number', 1))
         ])
     
-    print(tabulate(rows, headers=headers, tablefmt="grid"))
+    table = Table(show_header=True, header_style="bold cyan")
+    for header in headers:
+        table.add_column(header)
+    for row in rows:
+        table.add_row(*row)
+    
+    console = Console()
+    console.print(table)
     
     # Summary
     state_counts = {}
