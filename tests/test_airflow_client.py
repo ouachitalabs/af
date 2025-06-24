@@ -292,12 +292,21 @@ class TestAirflowClientTaskMethods:
         mock_response.to_dict.return_value = {"task_instances_cleared": ["test_task"]}
         mock_airflow_client.task_instance_api.post_clear_task_instances.return_value = mock_response
         
-        with patch('afcli.airflow_client.client.ClearTaskInstancesBody') as mock_clear_body:
+        with patch('afcli.airflow_client.client.ClearTaskInstancesBody') as mock_clear_body, \
+             patch('afcli.airflow_client.client.ClearTaskInstancesBodyTaskIdsInner') as mock_inner_class:
+            
+            mock_inner_instance = Mock()
+            mock_inner_class.return_value = mock_inner_instance
+            
             result = mock_airflow_client.clear_task_instance("test_dag", "test_run_1", "test_task")
             
+            # Verify the inner class was called with the task_id
+            mock_inner_class.assert_called_once_with("test_task")
+            
+            # Verify the ClearTaskInstancesBody was called with the inner instance
             mock_clear_body.assert_called_once_with(
                 dry_run=False,
-                task_ids=["test_task"],
+                task_ids=[mock_inner_instance],
                 only_failed=True,
                 only_running=False,
                 include_subdags=True,

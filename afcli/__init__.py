@@ -208,9 +208,11 @@ class AirflowClient:
     def clear_task_instance(self, dag_id: str, dag_run_id: str, task_id: str) -> Dict[str, Any]:
         """Clear a task instance"""
         try:
+            # Create the task_ids using the correct ClearTaskInstancesBodyTaskIdsInner structure
+            task_id_inner = airflow_client.client.ClearTaskInstancesBodyTaskIdsInner(task_id)
             clear_request = airflow_client.client.ClearTaskInstancesBody(
                 dry_run=False,
-                task_ids=[task_id],
+                task_ids=[task_id_inner],
                 only_failed=True,
                 only_running=False,
                 include_subdags=True,
@@ -341,7 +343,7 @@ def cmd_list(client: AirflowClient, args):
     for row in rows:
         table.add_row(*row)
     
-    console = Console()
+    console = Console(width=200, force_terminal=True)
     console.print(table)
     
     # Summary
@@ -412,7 +414,7 @@ def cmd_status(client: AirflowClient, args):
         for row in rows:
             table.add_row(*row)
         
-        console = Console()
+        console = Console(width=200, force_terminal=True)
         console.print(table)
     else:
         print(f"\n{Fore.YELLOW}No recent runs found{Style.RESET_ALL}")
@@ -515,7 +517,7 @@ def cmd_tasks(client: AirflowClient, args):
     for row in rows:
         table.add_row(*row)
     
-    console = Console()
+    console = Console(width=200, force_terminal=True)
     console.print(table)
     
     # Summary
@@ -686,6 +688,9 @@ Examples:
 
   # Clear failed tasks
   afcli clear my_dag
+  
+  # Clear specific task
+  afcli clear my_dag task_name
 
   # Use with different Airflow instance
   afcli --host airflow.company.com:8080 --user admin --password secret list
@@ -754,7 +759,7 @@ Useful LLM Context Commands:
     # Clear command
     clear_parser = subparsers.add_parser("clear", help="Clear failed tasks")
     clear_parser.add_argument("dag_id", help="DAG ID")
-    clear_parser.add_argument("--task-id", help="Specific task ID to clear (default: all failed tasks)")
+    clear_parser.add_argument("task_id", nargs="?", help="Specific task ID to clear (optional: clears all failed tasks)")
     clear_parser.add_argument("--run-id", help="DAG run ID (default: latest)")
     clear_parser.add_argument("-y", "--yes", action="store_true", help="Skip confirmation prompt")
     
