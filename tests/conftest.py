@@ -73,7 +73,7 @@ def mock_airflow_client():
         with patch('airflow_client.client.Configuration'):
             with patch('airflow_client.client.ApiClient'):
                 with patch('airflow_client.client.api.dag_api.DAGApi'):
-                    with patch('airflow_client.client.api.dag_run_api.DagRunApi'):
+                    with patch('airflow_client.client.api.dag_run_api.DAGRunApi'):
                         with patch('airflow_client.client.api.task_instance_api.TaskInstanceApi'):
                             client = AirflowClient("localhost:8080", "admin", "password")
                             

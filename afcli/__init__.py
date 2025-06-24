@@ -16,6 +16,7 @@ from colorama import init, Fore, Style
 import airflow_client.client
 from airflow_client.client.api import dag_api, dag_run_api, task_instance_api
 from airflow_client.client.exceptions import OpenApiException
+from airflow_client.client import models
 import requests
 
 # Initialize colorama for cross-platform color support
@@ -63,7 +64,7 @@ class AirflowClient:
         
         # Initialize API instances
         self.dag_api = dag_api.DAGApi(self.api_client)
-        self.dag_run_api = dag_run_api.DagRunApi(self.api_client)
+        self.dag_run_api = dag_run_api.DAGRunApi(self.api_client)
         self.task_instance_api = task_instance_api.TaskInstanceApi(self.api_client)
     
     def _try_get_jwt_token(self, username: str, password: str) -> Dict[str, Any]:
@@ -153,7 +154,7 @@ class AirflowClient:
     def toggle_dag_pause(self, dag_id: str, is_paused: bool) -> Dict[str, Any]:
         """Toggle DAG pause state"""
         try:
-            dag_update = airflow_client.client.DAGPatchBody(is_paused=is_paused)
+            dag_update = models.DAG(is_paused=is_paused)
             response = self.dag_api.patch_dag(dag_id, dag_update)
             return response.to_dict()
         except OpenApiException as e:
@@ -167,7 +168,7 @@ class AirflowClient:
             if logical_date is None:
                 logical_date = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
             
-            dag_run = airflow_client.client.TriggerDAGRunPostBody(
+            dag_run = models.DAGRun(
                 logical_date=logical_date,
                 conf=config or {},
                 dag_run_id=dag_run_id
@@ -208,11 +209,10 @@ class AirflowClient:
     def clear_task_instance(self, dag_id: str, dag_run_id: str, task_id: str) -> Dict[str, Any]:
         """Clear a task instance"""
         try:
-            # Create the task_ids using the correct ClearTaskInstancesBodyTaskIdsInner structure
-            task_id_inner = airflow_client.client.ClearTaskInstancesBodyTaskIdsInner(task_id)
-            clear_request = airflow_client.client.ClearTaskInstancesBody(
+            # Create the clear request for 2.9.1 API
+            clear_request = models.ClearTaskInstances(
                 dry_run=False,
-                task_ids=[task_id_inner],
+                task_ids=[task_id],
                 only_failed=True,
                 only_running=False,
                 include_subdags=True,

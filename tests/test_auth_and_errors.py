@@ -25,7 +25,7 @@ class TestAuthentication:
         with patch('afcli.airflow_client.client.Configuration'), \
              patch('afcli.airflow_client.client.ApiClient'), \
              patch('afcli.dag_api.DAGApi'), \
-             patch('afcli.dag_run_api.DagRunApi'), \
+             patch('afcli.dag_run_api.DAGRunApi'), \
              patch('afcli.task_instance_api.TaskInstanceApi'):
             
             client = AirflowClient("localhost:8080")
@@ -55,7 +55,7 @@ class TestAuthentication:
         with patch('afcli.airflow_client.client.Configuration'), \
              patch('afcli.airflow_client.client.ApiClient'), \
              patch('afcli.dag_api.DAGApi'), \
-             patch('afcli.dag_run_api.DagRunApi'), \
+             patch('afcli.dag_run_api.DAGRunApi'), \
              patch('afcli.task_instance_api.TaskInstanceApi'):
             
             client = AirflowClient("localhost:8080")
@@ -79,7 +79,7 @@ class TestAuthentication:
         with patch('afcli.airflow_client.client.Configuration'), \
              patch('afcli.airflow_client.client.ApiClient'), \
              patch('afcli.dag_api.DAGApi'), \
-             patch('afcli.dag_run_api.DagRunApi'), \
+             patch('afcli.dag_run_api.DAGRunApi'), \
              patch('afcli.task_instance_api.TaskInstanceApi'):
             
             client = AirflowClient("localhost:8080")
@@ -98,7 +98,7 @@ class TestAuthentication:
         with patch('afcli.airflow_client.client.Configuration'), \
              patch('afcli.airflow_client.client.ApiClient'), \
              patch('afcli.dag_api.DAGApi'), \
-             patch('afcli.dag_run_api.DagRunApi'), \
+             patch('afcli.dag_run_api.DAGRunApi'), \
              patch('afcli.task_instance_api.TaskInstanceApi'), \
              patch('requests.post', side_effect=requests.ConnectionError("Connection failed")):
             
@@ -123,7 +123,7 @@ class TestAuthentication:
         with patch('afcli.airflow_client.client.Configuration'), \
              patch('afcli.airflow_client.client.ApiClient'), \
              patch('afcli.dag_api.DAGApi'), \
-             patch('afcli.dag_run_api.DagRunApi'), \
+             patch('afcli.dag_run_api.DAGRunApi'), \
              patch('afcli.task_instance_api.TaskInstanceApi'):
             
             client = AirflowClient("localhost:8080")
@@ -146,7 +146,7 @@ class TestAuthentication:
         with patch('afcli.airflow_client.client.Configuration'), \
              patch('afcli.airflow_client.client.ApiClient'), \
              patch('afcli.dag_api.DAGApi'), \
-             patch('afcli.dag_run_api.DagRunApi'), \
+             patch('afcli.dag_run_api.DAGRunApi'), \
              patch('afcli.task_instance_api.TaskInstanceApi'):
             
             client = AirflowClient("localhost:8080")
@@ -171,7 +171,7 @@ class TestAuthentication:
         with patch('afcli.airflow_client.client.Configuration', return_value=config_instance) as mock_config, \
              patch('afcli.airflow_client.client.ApiClient'), \
              patch('afcli.dag_api.DAGApi'), \
-             patch('afcli.dag_run_api.DagRunApi'), \
+             patch('afcli.dag_run_api.DAGRunApi'), \
              patch('afcli.task_instance_api.TaskInstanceApi'):
             
             # Create client with credentials
@@ -200,7 +200,7 @@ class TestAuthentication:
         with patch('afcli.airflow_client.client.Configuration', return_value=config_instance) as mock_config, \
              patch('afcli.airflow_client.client.ApiClient'), \
              patch('afcli.dag_api.DAGApi'), \
-             patch('afcli.dag_run_api.DagRunApi'), \
+             patch('afcli.dag_run_api.DAGRunApi'), \
              patch('afcli.task_instance_api.TaskInstanceApi'):
             
             # Create client with credentials
@@ -309,7 +309,7 @@ class TestClientMethodErrorHandling:
     @pytest.mark.unit
     def test_toggle_dag_pause_api_error(self, mock_airflow_client, mock_openapi_exception):
         """Test toggle_dag_pause method with API error"""
-        with patch('afcli.airflow_client.client.DAGPatchBody'), \
+        with patch('afcli.models.DAG'), \
              patch.object(mock_airflow_client.dag_api, 'patch_dag', 
                          side_effect=mock_openapi_exception(401)):
             
@@ -319,7 +319,7 @@ class TestClientMethodErrorHandling:
     @pytest.mark.unit
     def test_trigger_dag_api_error(self, mock_airflow_client, mock_openapi_exception):
         """Test trigger_dag method with API error"""
-        with patch('afcli.airflow_client.client.TriggerDAGRunPostBody'), \
+        with patch('afcli.models.DAGRun'), \
              patch.object(mock_airflow_client.dag_run_api, 'trigger_dag_run', 
                          side_effect=mock_openapi_exception(400)):
             
@@ -345,7 +345,7 @@ class TestClientMethodErrorHandling:
     @pytest.mark.unit
     def test_clear_task_instance_api_error(self, mock_airflow_client, mock_openapi_exception):
         """Test clear_task_instance method with API error"""
-        with patch('afcli.airflow_client.client.ClearTaskInstancesBody'), \
+        with patch('afcli.models.ClearTaskInstances'), \
              patch.object(mock_airflow_client.task_instance_api, 'post_clear_task_instances', 
                          side_effect=mock_openapi_exception(403)):
             
@@ -363,7 +363,7 @@ class TestNetworkErrorHandling:
         with patch('afcli.airflow_client.client.Configuration'), \
              patch('afcli.airflow_client.client.ApiClient'), \
              patch('afcli.dag_api.DAGApi'), \
-             patch('afcli.dag_run_api.DagRunApi'), \
+             patch('afcli.dag_run_api.DAGRunApi'), \
              patch('afcli.task_instance_api.TaskInstanceApi'), \
              patch('requests.post', side_effect=requests.exceptions.Timeout("Request timed out")):
             
@@ -381,7 +381,7 @@ class TestNetworkErrorHandling:
         with patch('afcli.airflow_client.client.Configuration'), \
              patch('afcli.airflow_client.client.ApiClient'), \
              patch('afcli.dag_api.DAGApi'), \
-             patch('afcli.dag_run_api.DagRunApi'), \
+             patch('afcli.dag_run_api.DAGRunApi'), \
              patch('afcli.task_instance_api.TaskInstanceApi'), \
              patch('requests.post', side_effect=requests.exceptions.ConnectionError("Name resolution failed")):
             

@@ -16,7 +16,7 @@ class TestAirflowClientInit:
     @patch('afcli.airflow_client.client.Configuration')
     @patch('afcli.airflow_client.client.ApiClient')
     @patch('afcli.dag_api.DAGApi')
-    @patch('afcli.dag_run_api.DagRunApi')
+    @patch('afcli.dag_run_api.DAGRunApi')
     @patch('afcli.task_instance_api.TaskInstanceApi')
     def test_init_without_credentials(self, mock_task_api, mock_dag_run_api, mock_dag_api, 
                                     mock_api_client, mock_config):
@@ -36,7 +36,7 @@ class TestAirflowClientInit:
     @patch('afcli.airflow_client.client.Configuration')
     @patch('afcli.airflow_client.client.ApiClient')
     @patch('afcli.dag_api.DAGApi')
-    @patch('afcli.dag_run_api.DagRunApi')
+    @patch('afcli.dag_run_api.DAGRunApi')
     @patch('afcli.task_instance_api.TaskInstanceApi')
     @patch.object(AirflowClient, '_try_get_jwt_token')
     def test_init_with_credentials(self, mock_get_token, mock_task_api, mock_dag_run_api, 
@@ -71,7 +71,7 @@ class TestAirflowClientAuth:
         with patch('afcli.airflow_client.client.Configuration'), \
              patch('afcli.airflow_client.client.ApiClient'), \
              patch('afcli.dag_api.DAGApi'), \
-             patch('afcli.dag_run_api.DagRunApi'), \
+             patch('afcli.dag_run_api.DAGRunApi'), \
              patch('afcli.task_instance_api.TaskInstanceApi'):
             
             client = AirflowClient("localhost:8080")
@@ -94,7 +94,7 @@ class TestAirflowClientAuth:
         with patch('afcli.airflow_client.client.Configuration'), \
              patch('afcli.airflow_client.client.ApiClient'), \
              patch('afcli.dag_api.DAGApi'), \
-             patch('afcli.dag_run_api.DagRunApi'), \
+             patch('afcli.dag_run_api.DAGRunApi'), \
              patch('afcli.task_instance_api.TaskInstanceApi'):
             
             client = AirflowClient("localhost:8080")
@@ -115,7 +115,7 @@ class TestAirflowClientAuth:
         with patch('afcli.airflow_client.client.Configuration'), \
              patch('afcli.airflow_client.client.ApiClient'), \
              patch('afcli.dag_api.DAGApi'), \
-             patch('afcli.dag_run_api.DagRunApi'), \
+             patch('afcli.dag_run_api.DAGRunApi'), \
              patch('afcli.task_instance_api.TaskInstanceApi'):
             
             client = AirflowClient("localhost:8080")
@@ -186,7 +186,7 @@ class TestAirflowClientDagMethods:
         mock_response.to_dict.return_value = {"is_paused": True}
         mock_airflow_client.dag_api.patch_dag.return_value = mock_response
         
-        with patch('afcli.airflow_client.client.DAGPatchBody') as mock_patch_body:
+        with patch('afcli.models.DAG') as mock_patch_body:
             result = mock_airflow_client.toggle_dag_pause("test_dag", True)
             
             mock_patch_body.assert_called_once_with(is_paused=True)
@@ -214,7 +214,7 @@ class TestAirflowClientDagRunMethods:
         mock_response.to_dict.return_value = {"dag_run_id": "new_run", "state": "queued"}
         mock_airflow_client.dag_run_api.trigger_dag_run.return_value = mock_response
         
-        with patch('afcli.airflow_client.client.TriggerDAGRunPostBody') as mock_trigger_body:
+        with patch('afcli.models.DAGRun') as mock_trigger_body:
             result = mock_airflow_client.trigger_dag("test_dag", {"key": "value"})
             
             mock_trigger_body.assert_called_once()
@@ -227,7 +227,7 @@ class TestAirflowClientDagRunMethods:
         mock_response.to_dict.return_value = {"dag_run_id": "new_run", "state": "queued"}
         mock_airflow_client.dag_run_api.trigger_dag_run.return_value = mock_response
         
-        with patch('afcli.airflow_client.client.TriggerDAGRunPostBody') as mock_trigger_body:
+        with patch('afcli.models.DAGRun') as mock_trigger_body:
             custom_date = "2024-01-01T00:00:00Z"
             result = mock_airflow_client.trigger_dag(
                 "test_dag", 
@@ -292,21 +292,13 @@ class TestAirflowClientTaskMethods:
         mock_response.to_dict.return_value = {"task_instances_cleared": ["test_task"]}
         mock_airflow_client.task_instance_api.post_clear_task_instances.return_value = mock_response
         
-        with patch('afcli.airflow_client.client.ClearTaskInstancesBody') as mock_clear_body, \
-             patch('afcli.airflow_client.client.ClearTaskInstancesBodyTaskIdsInner') as mock_inner_class:
-            
-            mock_inner_instance = Mock()
-            mock_inner_class.return_value = mock_inner_instance
-            
+        with patch('afcli.models.ClearTaskInstances') as mock_clear_body:
             result = mock_airflow_client.clear_task_instance("test_dag", "test_run_1", "test_task")
             
-            # Verify the inner class was called with the task_id
-            mock_inner_class.assert_called_once_with("test_task")
-            
-            # Verify the ClearTaskInstancesBody was called with the inner instance
+            # Verify the ClearTaskInstances was called with the task_id directly
             mock_clear_body.assert_called_once_with(
                 dry_run=False,
-                task_ids=[mock_inner_instance],
+                task_ids=["test_task"],
                 only_failed=True,
                 only_running=False,
                 include_subdags=True,
